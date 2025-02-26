@@ -1,6 +1,8 @@
 package wapi
 
 import (
+	"context"
+
 	"github.com/labstack/echo/v4"
 	"github.com/wapikit/wapi.go/internal/request_client"
 	"github.com/wapikit/wapi.go/manager"
@@ -83,7 +85,9 @@ func (client *Client) On(eventType events.EventType, handler func(events.BaseEve
 
 // InitiateClient initializes the client and starts listening to events from the webhook.
 // It returns true if the client was successfully initiated.
-func (client *Client) Initiate() bool {
-	client.webhook.ListenToEvents()
+func (client *Client) Initiate(ctx context.Context, host string, port int) bool {
+	newCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	client.webhook.ListenToEvents(newCtx, host, port)
 	return true
 }

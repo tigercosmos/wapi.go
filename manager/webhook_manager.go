@@ -5,11 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/wapikit/wapi.go/internal"
@@ -283,7 +279,10 @@ func (wh *WebhookManager) PostRequestHandler(c echo.Context) error {
 }
 
 // ListenToEvents starts listening to events and handles incoming requests.
-func (wh *WebhookManager) ListenToEvents() {
+func (wh *WebhookManager) ListenToEvents(ctx context.Context, host string, port int) {
+	newCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	fmt.Println("Listening to events")
 	server := wh.createEchoHttpServer()
 	server.GET(wh.path, wh.GetRequestHandler)
@@ -291,22 +290,17 @@ func (wh *WebhookManager) ListenToEvents() {
 
 	// Start server in a goroutine
 	go func() {
-		if err := server.Start("127.0.0.1:8080"); err != nil {
+		if err := server.Start(fmt.Sprintf("%s:%d", host, port)); err != nil {
 			return
 		}
 	}()
 
 	wh.EventManager.Publish(events.ReadyEventType, events.NewReadyEvent())
-	// Wait for an interrupt signal (e.g., Ctrl+C)
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt) // Capture SIGINT (Ctrl+C)
-	<-quit                            // Wait for the signal
 
-	// Gracefully shut down the server (optional)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatal(err) // Handle shutdown errors gracefully
+	<-ctx.Done()
+	fmt.Println("Shutting down server")
+	if err := server.Shutdown(newCtx); err != nil {
+		fmt.Println("Error shutting down server:", err)
 	}
 }
 
